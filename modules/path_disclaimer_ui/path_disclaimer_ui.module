@@ -1,0 +1,80 @@
+<?php
+
+/**
+ * @file
+ * Code for the Path disclaimer UI module.
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function path_disclaimer_ui_menu() {
+  $items = array();
+
+  $items['admin/config/system/disclaimer'] = array(
+    'title' => 'Path disclaimer configuration',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('path_disclaimer_ui_admin_form'),
+    'access arguments' => array('administer site configuration'),
+  );
+
+  return $items;
+}
+
+/**
+ * Custom hook_menu callback.
+ */
+function path_disclaimer_ui_admin_form($form, &$form_state) {
+  $form['cookie_lifespan'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Cookie lifespan'),
+    '#description' => t('Enter the cookie lifespan in seconds. (1 hour is 3600 seconds, 24 hours is 86400 seconds)'),
+    '#default_value' => variable_get('path_disclaimer_ui_cookie_lifespan', 3600),
+  );
+
+  $paths = variable_get('path_disclaimer_ui_paths', array());
+  $form['paths'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Paths on where to apply the disclaimer'),
+    '#description' => t('Enter one path per line.'),
+    '#default_value' => implode(
+      PHP_EOL,
+      $paths
+    ),
+  );
+
+  $form['actions']['submit'] = array(
+    '#type' => 'submit',
+    '#value' => 'Submit !',
+  );
+
+  $form['#validate'][] = 'path_disclaimer_ui_admin_form_validate';
+  $form['#submit'][] = 'path_disclaimer_ui_admin_form_submit';
+
+  return system_settings_form($form);
+}
+
+/**
+ * Custom form validation callback.
+ */
+function path_disclaimer_ui_admin_form_validate($form, &$form_state) {
+  if (empty($form_state['values']['cookie_lifespan'])) {
+    form_set_error('password', 'Cookie length cannot be empty.');
+  }
+
+  if ($form_state['values']['cookie_lifespan'] <= 0) {
+    form_set_error('password', 'Cookie length must be an integer superior to zero.');
+  }
+
+  $form_state['values']['paths'] = array_filter(
+    array_map('trim', explode(PHP_EOL, $form_state['values']['paths']))
+  );
+}
+
+/**
+ * Custom form submit callback.
+ */
+function path_disclaimer_ui_admin_form_submit($form, &$form_state) {
+  variable_set('path_disclaimer_ui_cookie_lifespan', $form_state['values']['cookie_lifespan']);
+  variable_set('path_disclaimer_ui_paths', $form_state['values']['paths']);
+}

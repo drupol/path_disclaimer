@@ -1,0 +1,4 @@
+name = Path disclaimer configuration UI
+core = 7.x
+package = Access
+dependencies[] = path_disclaimer

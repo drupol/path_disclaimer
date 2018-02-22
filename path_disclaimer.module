@@ -1,0 +1,196 @@
+<?php
+
+/**
+ * @file
+ * Code for the Path disclaimer module.
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function path_disclaimer_menu() {
+  $items = array();
+
+  $items['disclaimer'] = array(
+    'title' => 'Disclaimer',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('_path_disclaimer_form'),
+    'access arguments' => array('access content'),
+    'type' => MENU_CALLBACK,
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_init().
+ */
+function path_disclaimer_init() {
+  if (user_access('disclaimer bypass')) {
+    return;
+  }
+
+  $current_path = current_path();
+
+  $paths = array_unique(array_filter(array_merge(
+    variable_get('path_disclaimer_ui_paths', array()),
+    module_invoke_all('path_disclaimer_path_info')
+  )));
+
+  $paths = array_unique(array_filter(array_merge(
+    $paths,
+    array_map(function($path) {
+      return drupal_get_normal_path($path);
+    }, $paths))));
+
+  if (!in_array($current_path, array_values($paths))) {
+    return;
+  }
+
+  $cookie_name = _get_cookie_name($current_path);
+  $cookie = array_key_exists($cookie_name, $_COOKIE) ? $_COOKIE[$cookie_name] : null;
+
+  if (!$cookie) {
+    drupal_goto('disclaimer/' . drupal_get_path_alias($current_path));
+  }
+}
+
+/**
+ * Implements hook_theme().
+ */
+function path_disclaimer_theme($existing, $type, $theme, $path) {
+  return array(
+    'path_disclaimer' => array(
+      'template' => 'path-disclaimer',
+      'variables' => array(),
+      'path' => $path . '/templates',
+    ),
+  );
+}
+
+/**
+ * Custom form callback.
+ */
+function _path_disclaimer_form($form, $form_state) {
+  $path = implode('/', array_slice(func_get_args(), 2));
+  $path_real = drupal_get_normal_path($path);
+
+  if (NULL == $path || !drupal_valid_path($path_real)) {
+    drupal_goto('/');
+  }
+
+  global $language;
+
+  $themes = _path_disclaimer_get_themes_functions($path_real, $path, $language->language);
+
+  $form['disclaimer'] = array(
+    '#theme' => array_map(function($themes) {
+      return implode(array_filter($themes), '__');
+    }, $themes),
+  );
+
+  $form['actions'] =  array('#type' => 'actions');
+
+  $form['actions']['accept'] = array(
+    '#type' => 'submit',
+    '#value' => t('I accept'),
+  );
+
+  $form['actions']['deny'] = array(
+    '#type' => 'submit',
+    '#value' => t('I refuse'),
+  );
+
+  $form['redirect'] = array(
+    '#type' => 'value',
+    '#value' => $path_real,
+  );
+
+  return $form;
+}
+
+/**
+ * @param string $path_real
+ * @param string $path
+ * @param string $language
+ *
+ * @return array
+ */
+function _path_disclaimer_get_themes_functions($path_real = '', $path = '', $language = '') {
+  $themes = array(
+    array(
+      'path_disclaimer',
+      preg_replace('@[^a-z0-9_]+@', '_', strtolower($path_real)),
+      $language,
+    ),
+    array(
+      'path_disclaimer',
+      preg_replace('@[^a-z0-9_]+@', '_', strtolower($path)),
+      $language,
+    ),
+    array(
+      'path_disclaimer',
+      $language,
+      preg_replace('@[^a-z0-9_]+@', '_', strtolower($path_real))
+    ),
+    array(
+      'path_disclaimer',
+      $language,
+      preg_replace('@[^a-z0-9_]+@', '_', strtolower($path))
+    ),
+  );
+
+  return array_unique(array_map(function($theme) {
+    return array_filter($theme);
+  }, $themes));
+}
+
+/**
+ * Custom form submit handler.
+ *
+ * @param $form
+ * @param $form_state
+ */
+function _path_disclaimer_form_submit(&$form, $form_state) {
+  $redirect = '/';
+
+  if ('edit-accept' == $form_state['triggering_element']['#id']) {
+    global $user;
+    $cookie_lifespan = variable_get('path_disclaimer_ui_cookie_lifespan', 0);
+    watchdog(
+      'Path disclaimer',
+      "The disclaimer has been displayed. <pre>@user</pre>",
+      array('@user' => print_r($user, 1)),
+      $severity = WATCHDOG_NOTICE,
+      $link = NULL
+    );
+
+    $redirect = $form_state['values']['redirect'];
+    setcookie(_get_cookie_name($redirect), 'path_disclaimer', time() + $cookie_lifespan * 1, '/');
+  }
+
+  drupal_goto($redirect);
+}
+
+/**
+ * Implements hook_permission().
+ */
+function path_disclaimer_permission() {
+  return array(
+    'disclaimer bypass' => array(
+      'title' => t('Bypass disclaimer for accessing specific paths.'),
+      'restrict access' => TRUE,
+    )
+  );
+}
+
+/**
+ * Helper function.
+ *
+ * @param string $path
+ *
+ * @return string
+ */
+function _get_cookie_name($path) {
+  return sha1($path . '_path_disclaimer');
+}
