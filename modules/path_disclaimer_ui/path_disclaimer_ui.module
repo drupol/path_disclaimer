@@ -24,19 +24,25 @@ function path_disclaimer_ui_menu() {
 /**
  * Custom hook_menu callback.
  */
-function path_disclaimer_ui_admin_form($form, &$form_state) {
+function path_disclaimer_ui_admin_form(array $form, array &$form_state) {
   $form['cookie_lifespan'] = array(
     '#type' => 'textfield',
     '#title' => t('Cookie lifespan'),
     '#description' => t('Enter the cookie lifespan in seconds. (1 hour is 3600 seconds, 24 hours is 86400 seconds)'),
     '#default_value' => variable_get('path_disclaimer_ui_cookie_lifespan', 3600),
   );
+  $form['cookie_name'] = array(
+    '#type' => 'textfield',
+    '#title' => 'Cookie name',
+    '#description' => t('Enter the cookie name'),
+    '#default_value' => variable_get('path_disclaimer_ui_cookie_name', 'disclaimer'),
+  );
 
   $paths = variable_get('path_disclaimer_ui_paths', array());
   $form['paths'] = array(
     '#type' => 'textarea',
-    '#title' => t('Paths on where to apply the disclaimer'),
-    '#description' => t('Enter one path per line.'),
+    '#title' => t('Visibility of the disclaimer'),
+    '#description' => t("Specify pages by using their paths. Enter one path per line. The '*' character is a wildcard. Example paths are %blog for the blog page and %blog-wildcard for every personal blog. %front is the front page.", array('%blog' => 'blog', '%blog-wildcard' => 'blog/*', '%front' => '<front>')),
     '#default_value' => implode(
       PHP_EOL,
       $paths
@@ -57,13 +63,17 @@ function path_disclaimer_ui_admin_form($form, &$form_state) {
 /**
  * Custom form validation callback.
  */
-function path_disclaimer_ui_admin_form_validate($form, &$form_state) {
-  if (empty($form_state['values']['cookie_lifespan'])) {
-    form_set_error('password', 'Cookie length cannot be empty.');
+function path_disclaimer_ui_admin_form_validate(array $form, array &$form_state) {
+  if (empty($form_state['values']['cookie_name'])) {
+    form_set_error('cookie_name', 'Cookie name cannot be empty.');
   }
 
-  if ($form_state['values']['cookie_lifespan'] <= 0) {
-    form_set_error('password', 'Cookie length must be an integer superior to zero.');
+  if (
+    $form_state['values']['cookie_lifespan'] <= 0 ||
+    empty($form_state['values']['cookie_lifespan']) ||
+    !is_numeric($form_state['values']['cookie_lifespan'])
+  ) {
+    form_set_error('cookie_lifespan', 'Cookie lifespan must be a non empty positive numeric value.');
   }
 
   $form_state['values']['paths'] = array_filter(
@@ -74,7 +84,8 @@ function path_disclaimer_ui_admin_form_validate($form, &$form_state) {
 /**
  * Custom form submit callback.
  */
-function path_disclaimer_ui_admin_form_submit($form, &$form_state) {
+function path_disclaimer_ui_admin_form_submit(array $form, array &$form_state) {
+  variable_set('path_disclaimer_ui_cookie_name', $form_state['values']['cookie_name']);
   variable_set('path_disclaimer_ui_cookie_lifespan', $form_state['values']['cookie_lifespan']);
   variable_set('path_disclaimer_ui_paths', $form_state['values']['paths']);
 }

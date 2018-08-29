@@ -39,15 +39,13 @@ function path_disclaimer_init() {
 
   $paths = array_unique(array_filter(array_merge(
     $paths,
-    array_map(function($path) {
-      return drupal_get_normal_path($path);
-    }, $paths))));
+    array_map('drupal_get_normal_path', $paths))));
 
-  if (!in_array($current_path, array_values($paths))) {
+  if (!drupal_match_path($current_path, implode(PHP_EOL, $paths))) {
     return;
   }
 
-  $cookie_name = _get_cookie_name($current_path);
+  $cookie_name = _path_disclaimer_get_cookie_name($current_path);
   $cookie = array_key_exists($cookie_name, $_COOKIE) ? $_COOKIE[$cookie_name] : null;
 
   if (!$cookie) {
@@ -71,11 +69,11 @@ function path_disclaimer_theme($existing, $type, $theme, $path) {
 /**
  * Custom form callback.
  */
-function _path_disclaimer_form($form, $form_state) {
+function _path_disclaimer_form(array $form, array $form_state) {
   $path = implode('/', array_slice(func_get_args(), 2));
   $path_real = drupal_get_normal_path($path);
 
-  if (NULL == $path || !drupal_valid_path($path_real)) {
+  if (NULL === $path || !drupal_valid_path($path_real)) {
     drupal_goto('/');
   }
 
@@ -84,9 +82,9 @@ function _path_disclaimer_form($form, $form_state) {
   $themes = _path_disclaimer_get_themes_functions($path_real, $path, $language->language);
 
   $form['disclaimer'] = array(
-    '#theme' => array_map(function($themes) {
-      return implode(array_filter($themes), '__');
-    }, $themes),
+    '#theme' => array_values(array_map(function($themes) {
+      return implode($themes, '__');
+    }, $themes)),
   );
 
   $form['actions'] =  array('#type' => 'actions');
@@ -120,16 +118,6 @@ function _path_disclaimer_get_themes_functions($path_real = '', $path = '', $lan
   $themes = array(
     array(
       'path_disclaimer',
-      preg_replace('@[^a-z0-9_]+@', '_', strtolower($path_real)),
-      $language,
-    ),
-    array(
-      'path_disclaimer',
-      preg_replace('@[^a-z0-9_]+@', '_', strtolower($path)),
-      $language,
-    ),
-    array(
-      'path_disclaimer',
       $language,
       preg_replace('@[^a-z0-9_]+@', '_', strtolower($path_real))
     ),
@@ -138,11 +126,19 @@ function _path_disclaimer_get_themes_functions($path_real = '', $path = '', $lan
       $language,
       preg_replace('@[^a-z0-9_]+@', '_', strtolower($path))
     ),
+    array(
+      'path_disclaimer',
+      preg_replace('@[^a-z0-9_]+@', '_', strtolower($path_real)),
+      $language,
+    ),
+    array(
+      'path_disclaimer',
+      preg_replace('@[^a-z0-9_]+@', '_', strtolower($path)),
+      $language,
+    ),
   );
 
-  return array_unique(array_map(function($theme) {
-    return array_filter($theme);
-  }, $themes));
+  return array_unique(array_map('array_filter', $themes), SORT_REGULAR);
 }
 
 /**
@@ -151,22 +147,22 @@ function _path_disclaimer_get_themes_functions($path_real = '', $path = '', $lan
  * @param $form
  * @param $form_state
  */
-function _path_disclaimer_form_submit(&$form, $form_state) {
+function _path_disclaimer_form_submit(array &$form, array $form_state) {
   $redirect = '/';
 
-  if ('edit-accept' == $form_state['triggering_element']['#id']) {
+  if ('edit-accept' === $form_state['triggering_element']['#id']) {
     global $user;
     $cookie_lifespan = variable_get('path_disclaimer_ui_cookie_lifespan', 0);
     watchdog(
       'Path disclaimer',
-      "The disclaimer has been displayed. <pre>@user</pre>",
+      'The disclaimer has been displayed. <pre>@user</pre>',
       array('@user' => print_r($user, 1)),
       $severity = WATCHDOG_NOTICE,
       $link = NULL
     );
 
     $redirect = $form_state['values']['redirect'];
-    setcookie(_get_cookie_name($redirect), 'path_disclaimer', time() + $cookie_lifespan * 1, '/');
+    setcookie(_path_disclaimer_get_cookie_name($redirect), 'path_disclaimer', time() + $cookie_lifespan * 1, '/');
   }
 
   drupal_goto($redirect);
@@ -191,6 +187,6 @@ function path_disclaimer_permission() {
  *
  * @return string
  */
-function _get_cookie_name($path) {
+function _path_disclaimer_get_cookie_name($path) {
   return sha1($path . '_path_disclaimer');
 }

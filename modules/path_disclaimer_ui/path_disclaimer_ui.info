@@ -1,4 +1,6 @@
 name = Path disclaimer configuration UI
+description = Provide a UI for the <em>path disclaimer</em> module configuration.
 core = 7.x
 package = Access
 dependencies[] = path_disclaimer
+configure = admin/config/system/disclaimer
